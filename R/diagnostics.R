@@ -30,86 +30,117 @@ dcvar_diagnostics.default <- function(object, ...) {
   cli_abort("{.fun dcvar_diagnostics} is not defined for objects of class {.cls {class(object)[[1]]}}.")
 }
 
+#' Internal: validate model dimensions used by diagnostics
+#' @noRd
+.diagnostic_positive_int <- function(value, name, location) {
+  if (!is.numeric(value) || length(value) != 1L || !is.finite(value) ||
+      value < 1 || value != as.integer(value)) {
+    cli_abort(
+      "{.fun dcvar_diagnostics} requires {.field {name}} to be a positive integer in {.field {location}}."
+    )
+  }
+
+  as.integer(value)
+}
+
 #' Internal: build the exact sampled-parameter set for diagnostics
 #' @noRd
 .diagnostic_parameter_variables <- function(object) {
   margins <- object$margins %||% "normal"
   model <- object$model
 
-  mu_vars <- paste0("mu[", seq_len(object$stan_data$D), "]")
-  phi_vars <- paste0(
-    "Phi[",
-    rep(seq_len(object$stan_data$D), each = object$stan_data$D),
-    ",",
-    rep(seq_len(object$stan_data$D), times = object$stan_data$D),
-    "]"
-  )
-  margin_vars <- switch(margins,
-    normal = paste0("sigma_eps[", seq_len(object$stan_data$D), "]"),
-    exponential = paste0("eta[", seq_len(object$stan_data$D), "]"),
-    skew_normal = c(
-      paste0("omega[", seq_len(object$stan_data$D), "]"),
-      paste0("delta[", seq_len(object$stan_data$D), "]")
-    ),
-    gamma = c(
-      paste0("eta[", seq_len(object$stan_data$D), "]"),
-      "shape_gam"
-    ),
-    paste0("sigma_eps[", seq_len(object$stan_data$D), "]")
-  )
-
-  switch(model,
-    constant = c(mu_vars, phi_vars, margin_vars, "z_rho"),
-    dcvar = c(
-      mu_vars,
-      phi_vars,
-      margin_vars,
-      "z_rho_init",
-      "sigma_omega",
-      paste0("omega_raw[", seq_len(object$stan_data$T - 1), "]")
-    ),
-    hmm = c(
-      mu_vars,
-      phi_vars,
-      margin_vars,
-      paste0("z_rho[", seq_len(object$K), "]"),
-      paste0("pi0[", seq_len(object$K), "]"),
-      paste0(
-        "A[",
-        rep(seq_len(object$K), each = object$K),
-        ",",
-        rep(seq_len(object$K), times = object$K),
-        "]"
-      )
-    ),
-    multilevel = c(
+  if (identical(model, "multilevel")) {
+    N <- .diagnostic_positive_int(object$N, "N", "object")
+    return(c(
       paste0("phi_bar[", seq_len(4), "]"),
       paste0("tau_phi[", seq_len(4), "]"),
       paste0(
         "z_phi[",
-        rep(seq_len(object$N), each = 4),
+        rep(seq_len(N), each = 4),
         ",",
-        rep(seq_len(4), times = object$N),
+        rep(seq_len(4), times = N),
         "]"
       ),
       paste0("sigma[", seq_len(2), "]"),
       "rho"
-    ),
-    sem = c(
+    ))
+  }
+
+  if (identical(model, "sem")) {
+    T_obs <- .diagnostic_positive_int(object$stan_data$T, "T", "stan_data")
+    return(c(
       "mu[1]", "mu[2]",
       "phi11", "phi12", "phi21", "phi22",
       paste0("sigma[", seq_len(2), "]"),
       "rho_raw",
       paste0(
         "zeta[",
-        rep(seq_len(object$stan_data$T), each = 2),
+        rep(seq_len(T_obs), each = 2),
         ",",
-        rep(seq_len(2), times = object$stan_data$T),
+        rep(seq_len(2), times = T_obs),
         "]"
       )
-    ),
-    c(mu_vars, phi_vars, margin_vars)
+    ))
+  }
+
+  D <- .diagnostic_positive_int(object$stan_data$D, "D", "stan_data")
+  mu_vars <- paste0("mu[", seq_len(D), "]")
+  phi_vars <- paste0(
+    "Phi[",
+    rep(seq_len(D), each = D),
+    ",",
+    rep(seq_len(D), times = D),
+    "]"
   )
+  margin_vars <- switch(margins,
+    normal = paste0("sigma_eps[", seq_len(D), "]"),
+    exponential = paste0("eta[", seq_len(D), "]"),
+    skew_normal = c(
+      paste0("omega[", seq_len(D), "]"),
+      paste0("delta[", seq_len(D), "]")
+    ),
+    gamma = c(
+      paste0("eta[", seq_len(D), "]"),
+      "shape_gam"
+    ),
+    paste0("sigma_eps[", seq_len(D), "]")
+  )
+
+  if (identical(model, "constant")) {
+    return(c(mu_vars, phi_vars, margin_vars, "z_rho"))
+  }
+
+  if (identical(model, "dcvar")) {
+    T_obs <- .diagnostic_positive_int(object$stan_data$T, "T", "stan_data")
+    return(c(
+      mu_vars,
+      phi_vars,
+      margin_vars,
+      "z_rho_init",
+      "sigma_omega",
+      paste0("omega_raw[", seq_len(T_obs - 1), "]")
+    ))
+  }
+
+  if (identical(model, "hmm")) {
+    K <- .diagnostic_positive_int(object$K, "K", "object")
+    return(c(
+      mu_vars,
+      phi_vars,
+      margin_vars,
+      paste0("z_rho[", seq_len(K), "]"),
+      paste0("pi0[", seq_len(K), "]"),
+      paste0(
+        "A[",
+        rep(seq_len(K), each = K),
+        ",",
+        rep(seq_len(K), times = K),
+        "]"
+      )
+    ))
+  }
+
+  c(mu_vars, phi_vars, margin_vars)
 }
 
 #' Internal: extract common diagnostics from a CmdStanMCMC fit
