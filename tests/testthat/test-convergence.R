@@ -16,6 +16,36 @@ test_that("cached baseline fits emit only known diagnostic warnings", {
   expect_known_fit_warnings(get_constant_fit_warnings(), "constant")
 })
 
+test_that("gamma fits emit only known diagnostic warnings", {
+  skip_if_no_rstan()
+
+  expect_known_fit_warnings(get_dcvar_gamma_fit_warnings(), "dcvar gamma")
+  expect_known_fit_warnings(get_hmm_gamma_fit_warnings(), "hmm gamma")
+  expect_known_fit_warnings(get_constant_gamma_fit_warnings(), "constant gamma")
+})
+
+.expect_gamma_support_consistent <- function(fit, co, fit_name) {
+  required_mean <- pmax(.gamma_support_bound(fit), 0)
+  implied_mean <- sqrt(unname(co$shape_gam[[1]])) * unname(co$sigma_gam)
+
+  expect_true(
+    all(implied_mean + 1e-8 >= required_mean),
+    info = paste(
+      fit_name,
+      "gamma support violated:",
+      paste(
+        sprintf(
+          "dim %d mean=%.4f lb=%.4f",
+          seq_along(implied_mean),
+          implied_mean,
+          required_mean
+        ),
+        collapse = ", "
+      )
+    )
+  )
+}
+
 test_that("dcvar fit has no divergences and finite Rhat", {
   skip_if_no_rstan()
 
@@ -73,6 +103,22 @@ test_that("dcvar exponential fit has usable diagnostics", {
   expect_true(all(co$sigma_exp > 0))
 })
 
+test_that("dcvar gamma fit has usable diagnostics", {
+  skip_if_no_rstan()
+
+  fit <- get_dcvar_gamma_fit()
+  diag <- dcvar_diagnostics(fit)
+  co <- coef(fit)
+
+  expect_equal(diag$n_divergent, 0)
+  expect_equal(diag$n_max_treedepth, 0)
+  expect_true(is.finite(diag$max_rhat))
+  expect_true(diag$max_rhat < 1.35, info = paste("max_rhat =", signif(diag$max_rhat, 4)))
+  expect_true(all(co$sigma_gam > 0))
+  expect_true(co$shape_gam > 0)
+  .expect_gamma_support_consistent(fit, co, "dcvar gamma")
+})
+
 test_that("hmm exponential fit has usable diagnostics", {
   skip_if_no_rstan()
 
@@ -87,6 +133,22 @@ test_that("hmm exponential fit has usable diagnostics", {
   expect_true(all(co$sigma_exp > 0))
 })
 
+test_that("hmm gamma fit has usable diagnostics", {
+  skip_if_no_rstan()
+
+  fit <- get_hmm_gamma_fit()
+  diag <- dcvar_diagnostics(fit)
+  co <- coef(fit)
+
+  expect_equal(diag$n_divergent, 0)
+  expect_equal(diag$n_max_treedepth, 0)
+  expect_true(is.finite(diag$max_rhat))
+  expect_true(diag$max_rhat < 1.35, info = paste("max_rhat =", signif(diag$max_rhat, 4)))
+  expect_true(all(co$sigma_gam > 0))
+  expect_true(co$shape_gam > 0)
+  .expect_gamma_support_consistent(fit, co, "hmm gamma")
+})
+
 test_that("constant gamma fit has usable diagnostics", {
   skip_if_no_rstan()
 
@@ -97,9 +159,10 @@ test_that("constant gamma fit has usable diagnostics", {
   expect_equal(diag$n_divergent, 0)
   expect_equal(diag$n_max_treedepth, 0)
   expect_true(is.finite(diag$max_rhat))
-  expect_true(diag$max_rhat < 1.35)
+  expect_true(diag$max_rhat < 1.35, info = paste("max_rhat =", signif(diag$max_rhat, 4)))
   expect_true(all(co$sigma_gam > 0))
   expect_true(co$shape_gam > 0)
+  .expect_gamma_support_consistent(fit, co, "constant gamma")
 })
 
 # --- Parameter recovery: rho estimates are bounded ----------------------------

@@ -53,9 +53,19 @@ test_that("dcvar_hmm() fits exponential margins", {
   expect_equal(fit$K, 2)
 })
 
+test_that("dcvar_hmm() fits gamma margins", {
+  skip_if_no_rstan()
+
+  fit <- get_hmm_gamma_fit()
+  expect_s3_class(fit, "dcvar_hmm_fit")
+  expect_equal(fit$margins, "gamma")
+  expect_equal(fit$K, 2)
+})
+
 test_that("hmm fit cache emits only known diagnostic warnings", {
   skip_if_no_rstan()
 
   expect_known_fit_warnings(get_hmm_fit_warnings(), "hmm")
   expect_known_fit_warnings(get_hmm_exponential_fit_warnings(), "hmm exponential")
+  expect_known_fit_warnings(get_hmm_gamma_fit_warnings(), "hmm gamma")
 })

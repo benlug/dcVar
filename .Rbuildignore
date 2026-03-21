@@ -1,6 +1,7 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^\.Rprofile$
+^\.claude$
 ^\.github$
 ^_pkgdown\.yml$
 ^docs$

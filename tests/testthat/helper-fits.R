@@ -100,6 +100,29 @@ smoke_iter_sampling <- 75
 margin_iter_warmup <- 300
 margin_iter_sampling <- 300
 
+.gamma_support_bound <- function(fit) {
+  eps_draws <- posterior::as_draws_matrix(.fit_draws(
+    fit$fit, "eps", backend = fit$backend,
+    required = .stan_output_group_pattern("eps"),
+    required_type = "pattern",
+    context = ".gamma_support_bound()",
+    output_type = "transformed parameter group"
+  ))
+
+  T_eff <- fit$stan_data$T - 1
+  D <- fit$stan_data$D
+  eps_mean <- matrix(NA_real_, nrow = T_eff, ncol = D)
+
+  for (d in seq_len(D)) {
+    cols <- paste0("eps[", seq_len(T_eff), ",", d, "]")
+    eps_mean[, d] <- colMeans(eps_draws[, cols, drop = FALSE])
+  }
+
+  vapply(seq_len(D), function(d) {
+    max(-fit$skew_direction[d] * eps_mean[, d])
+  }, numeric(1))
+}
+
 get_dcvar_fit <- function() {
   .cache_fit_result("dcvar_fit", function() {
     sim <- simulate_dcvar(T = 50, rho_trajectory = rho_decreasing(50), seed = 42)
@@ -308,6 +331,58 @@ get_dcvar_exponential_fit_warnings <- function() {
   })$warnings
 }
 
+get_dcvar_gamma_fit <- function() {
+  .cache_fit_result("dcvar_fit_gamma", function() {
+    sim <- simulate_dcvar(
+      T = 100,
+      rho_trajectory = rho_decreasing(100),
+      margins = "gamma",
+      skew_direction = c(1, 1),
+      skew_params = list(shape = 2),
+      seed = 42
+    )
+    dcvar(
+      sim$Y_df,
+      vars = c("y1", "y2"),
+      margins = "gamma",
+      skew_direction = c(1, 1),
+      chains = 4,
+      iter_warmup = max(margin_iter_warmup, 750),
+      iter_sampling = max(margin_iter_sampling, 750),
+      adapt_delta = 0.999,
+      max_treedepth = 15,
+      refresh = 0,
+      seed = 123
+    )
+  })$fit
+}
+
+get_dcvar_gamma_fit_warnings <- function() {
+  .cache_fit_result("dcvar_fit_gamma", function() {
+    sim <- simulate_dcvar(
+      T = 100,
+      rho_trajectory = rho_decreasing(100),
+      margins = "gamma",
+      skew_direction = c(1, 1),
+      skew_params = list(shape = 2),
+      seed = 42
+    )
+    dcvar(
+      sim$Y_df,
+      vars = c("y1", "y2"),
+      margins = "gamma",
+      skew_direction = c(1, 1),
+      chains = 4,
+      iter_warmup = max(margin_iter_warmup, 750),
+      iter_sampling = max(margin_iter_sampling, 750),
+      adapt_delta = 0.999,
+      max_treedepth = 15,
+      refresh = 0,
+      seed = 123
+    )
+  })$warnings
+}
+
 get_hmm_exponential_fit <- function() {
   .cache_fit_result("hmm_fit_exponential", function() {
     # Use a strongly separated step trajectory so the tiny test fit remains
@@ -362,6 +437,60 @@ get_hmm_exponential_fit_warnings <- function() {
   })$warnings
 }
 
+get_hmm_gamma_fit <- function() {
+  .cache_fit_result("hmm_fit_gamma", function() {
+    sim <- simulate_dcvar(
+      T = 100,
+      rho_trajectory = rho_step(100, rho_before = 0.9, rho_after = 0.1),
+      margins = "gamma",
+      skew_direction = c(1, 1),
+      skew_params = list(shape = 2),
+      seed = 42
+    )
+    dcvar_hmm(
+      sim$Y_df,
+      vars = c("y1", "y2"),
+      K = 2,
+      margins = "gamma",
+      skew_direction = c(1, 1),
+      chains = 4,
+      iter_warmup = max(margin_iter_warmup, 750),
+      iter_sampling = max(margin_iter_sampling, 750),
+      adapt_delta = 0.999,
+      max_treedepth = 15,
+      refresh = 0,
+      seed = 123
+    )
+  })$fit
+}
+
+get_hmm_gamma_fit_warnings <- function() {
+  .cache_fit_result("hmm_fit_gamma", function() {
+    sim <- simulate_dcvar(
+      T = 100,
+      rho_trajectory = rho_step(100, rho_before = 0.9, rho_after = 0.1),
+      margins = "gamma",
+      skew_direction = c(1, 1),
+      skew_params = list(shape = 2),
+      seed = 42
+    )
+    dcvar_hmm(
+      sim$Y_df,
+      vars = c("y1", "y2"),
+      K = 2,
+      margins = "gamma",
+      skew_direction = c(1, 1),
+      chains = 4,
+      iter_warmup = max(margin_iter_warmup, 750),
+      iter_sampling = max(margin_iter_sampling, 750),
+      adapt_delta = 0.999,
+      max_treedepth = 15,
+      refresh = 0,
+      seed = 123
+    )
+  })$warnings
+}
+
 get_constant_gamma_fit <- function() {
   .cache_fit_result("constant_fit_gamma", function() {
     # Gamma-margin smoke fits need a bit more adaptation headroom than the
@@ -379,9 +508,9 @@ get_constant_gamma_fit <- function() {
       vars = c("y1", "y2"),
       margins = "gamma",
       skew_direction = c(1, 1),
-      chains = 2,
-      iter_warmup = max(margin_iter_warmup, 500),
-      iter_sampling = max(margin_iter_sampling, 500),
+      chains = 4,
+      iter_warmup = max(margin_iter_warmup, 750),
+      iter_sampling = max(margin_iter_sampling, 750),
       adapt_delta = 0.999,
       max_treedepth = 15,
       refresh = 0,
@@ -405,9 +534,9 @@ get_constant_gamma_fit_warnings <- function() {
       vars = c("y1", "y2"),
       margins = "gamma",
       skew_direction = c(1, 1),
-      chains = 2,
-      iter_warmup = max(margin_iter_warmup, 500),
-      iter_sampling = max(margin_iter_sampling, 500),
+      chains = 4,
+      iter_warmup = max(margin_iter_warmup, 750),
+      iter_sampling = max(margin_iter_sampling, 750),
       adapt_delta = 0.999,
       max_treedepth = 15,
       refresh = 0,

@@ -51,9 +51,18 @@ test_that("dcvar() fits exponential margins", {
   expect_equal(fit$margins, "exponential")
 })
 
+test_that("dcvar() fits gamma margins", {
+  skip_if_no_rstan()
+
+  fit <- get_dcvar_gamma_fit()
+  expect_s3_class(fit, "dcvar_fit")
+  expect_equal(fit$margins, "gamma")
+})
+
 test_that("dcvar fit cache emits only known diagnostic warnings", {
   skip_if_no_rstan()
 
   expect_known_fit_warnings(get_dcvar_fit_warnings(), "dcvar")
   expect_known_fit_warnings(get_dcvar_exponential_fit_warnings(), "dcvar exponential")
+  expect_known_fit_warnings(get_dcvar_gamma_fit_warnings(), "dcvar gamma")
 })
